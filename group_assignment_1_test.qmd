@@ -1,0 +1,26 @@
+---
+title: "Group Assignment 1: Predicting Flight Delays on Test Data"
+subtitle: "Stat 253"
+author: "Your Names"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+    code-tools: true
+---
+
+*Instructions: Copy the following text and code to your previous template. Update the name of the final model, if needed. Then, render the document and submit the html to the Moodle Assignment called GroupAssign1_Test.*
+
+
+# Validation
+
+```{r}
+#| message: false
+#| warning: false
+Flights_Test <- read_csv('Flights_Test.csv')
+
+final_model %>%
+  augment(new_data = Flights_Test) %>%
+  mae(truth = arr_delay, estimate = .pred)
+```
