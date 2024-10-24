@@ -1,0 +1,226 @@
+---
+title: "Group Assignment 1: Predicting Flight Delays"
+subtitle: "Stat 253"
+author: "Eric, Hareth, and Nathan"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+    code-tools: true
+---
+
+
+```{r}
+#| include: false
+# Load packages
+# if your group needs any other packages, add them here
+library(tidyverse)
+library(tidymodels)
+
+# Resolves package conflicts by preferring tidymodels functions
+tidymodels_prefer()
+```
+
+
+# Research Goals
+
+*Instructions: Briefly describe your goals for this report. Provide some context to understand your goals.*
+
+In this report, our goal is to build the best possible predictive regression model using the Flights_Train.csv dataset. Since this is our first attempt at creating a predictive model from scratch, we aim not only to develop a highly accurate model but also to learn and improve our skills throughout the process. Our primary focus will be on understanding the data, identifying the relationships between predictors and the target variable, and using these insights to create an effective model for predicting flight delays.
+
+
+
+
+# Data
+
+*Instructions: Briefly describe your training data, making sure to answer the 5 W's (+H) we discuss in STAT 155 (who, what, where, when, why, how). Give insight into the outcome and summary (not an exhaustive list) of available predictors. You may use 1 visualization in this section.*
+
+
+Who: The dataset consists of flight data from multiple airlines, each flight being identified by details such as flight number, carrier, and tail number. The dataset includes details about the origin and destination airports, as well as plane-specific information like plane manufacturer and year.
+
+What: The primary goal is to predict arrival delay (measured in minutes), which is the outcome variable. Predictors include various factors related to the flight, such as departure time, distance, wind speed, visibility, plane model, and carrier.
+
+Where: The dataset includes flights from various locations across the United States. It records the origin and destination of flights along with their geographical details (e.g., latitude and longitude).
+
+When: The dataset spans flights from the year 2022, with details about the exact day and time of scheduled departure and arrival.
+
+Why: This dataset is used to build a predictive model that can help forecast whether a flight will be delayed based on available features such as flight characteristics, weather conditions, and aircraft specifics.
+
+How: The data was likely gathered from various airline and aviation-related data sources, including flight logs, weather reports, and operational data from airlines.
+
+
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+# read in data
+
+
+
+library(tidyverse)
+library(tidymodels)
+library(dplyr)
+
+
+file_path <- "~/Desktop/Stat253/Groupwork/Group_Assignment_1/Flights_Train.csv"
+
+# Read the CSV file
+data <- read.csv(file_path)
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+# visualization
+
+
+
+library(ggplot2)
+
+
+
+
+ggplot(data, aes(x = arr_delay)) +
+  geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Arrival Delays",
+       x = "Arrival Delay (minutes)",
+       y = "Frequency") +
+  theme_minimal()
+```
+The histogram above shows the distribution of arrival delays in the dataset. We can observe that most flights have a small delay, with many flights even arriving early (negative delay). However, there is also a significant tail where flights experience large delays. This initial visualization provides insight into the outcome variable, which we will aim to predict using the provided features in our model.
+
+
+
+# Model Building
+
+*Instructions: Describe the process by which you came up with the final model. This does not include every step you took but rather the final path your group decided on to build a model. Make sure to clearly JUSTIFY all of your choices.*
+
+In developing our final model, we first considered several predictive models to determine which would best suit our dataset and goal of predicting flight delays. After exploring Normal Regression, Lasso Regression, and K-Nearest Neighbors (KNN) individually, we decided to proceed with Lasso Regression. This choice was primarily driven by the high dimensionality of our data and the need for variable selection to eliminate unnecessary predictors and avoid overfitting.
+
+One of the most important steps in our process was performing variable selection to simplify the model and improve its feasibility. As we analyzed the dataset, we identified several variables that were either redundant or irrelevant to predicting flight delays. For instance, there were many destination-related variables that didn’t contribute much value to the prediction model, so we opted to exclude them. Additionally, we consolidated some of the airline data, grouping airlines together when they were subsidiaries or owned by the same parent company. This helped reduce the complexity of the model without losing important distinctions.
+
+Some variables, such as tail number, were particularly clunky and problematic. Tail numbers introduced far too many coefficients, leading to over-complication. These variables did not add any predictive value beyond what was already captured by other plane-specific variables, such as plane model and manufacturer. We decided to eliminate them altogether to streamline the model.
+
+Despite selecting Lasso Regression, we faced technical difficulties when running the model due to the large number of predictors, many of which had numerous levels. The model would often take too long to compute or even crash mid-execution. To address this issue, we had to reduce the number of folds in cross-validation and limit the levels of categorical variables. These changes were necessary to make the model computationally feasible and allowed us to build a workable model.
+
+Ultimately, our process involved a mix of model selection and careful variable reduction to remove redundant or unhelpful predictors. Lasso Regression, with its ability to perform variable selection, was the ideal choice, although we had to make adjustments to improve its performance. By simplifying the model through variable consolidation and elimination, we were able to build a more efficient predictive model while still capturing the important factors that influence flight delays.
+
+# Implementation
+
+*Instructions: Implement the process you've described above. We'll "fold" this code into a "details" environment in Quarto so the reader can choose whether or not they want to view the code. I set this up for you (`<details>`, `<summary>...</summary>`, `</details>`) -- do not remove these.*
+
+We used tidymodels to implement this model building process. See code below for full details.
+
+<details>
+<summary>View Code</summary>
+
+
+```{r}
+#| message: false
+#| warning: false
+# YOUR CODE HERE
+
+
+
+clean_data <- data %>% select(-year, -dest_name, -dest_lat, -dest_lon, -dest_tz, -dest_dst, -dest_tzone, -wind_gust, -plane_type, -plane_engines, -date, -origin, -carrier, -tailnum, -time_hour)
+
+
+
+clean_data <- clean_data %>%
+  mutate(plane_manufacturer = case_when(
+    plane_manufacturer %in% c('AIRBUS INDUSTRIE', 'AIRBUS CANADA LTD PTNRSP', 
+                              'AIRBUS SAS', 'C SERIES AIRCRAFT LTD PTNRSP') ~ 'AIRBUS',
+    plane_manufacturer %in% c('EMBRAER S A', 'EMBRAER-EMPRESA BRASILEIRA DE') ~ 'EMBRAER',
+    TRUE ~ plane_manufacturer 
+  ))
+
+
+
+
+clean_data <- clean_data %>%
+  mutate(carrier_name = case_when(
+    carrier_name == 'Endeavor Air Inc.' ~ 'Delta Air Lines Inc.',
+    carrier_name == 'SkyWest Airlines Inc.' ~ 'Delta Air Lines Inc.', 
+    carrier_name == 'Envoy Air' ~ 'American Airlines Inc.',
+    carrier_name == 'PSA Airlines Inc.' ~ 'American Airlines Inc.',
+    carrier_name == 'Republic Airline' ~ 'American Airlines Inc.',  
+    carrier_name == 'Mesa Airlines Inc.' ~ 'United Air Lines Inc.', 
+    carrier_name == 'Horizon Air' ~ 'Alaska Airlines Inc.',
+    TRUE ~ carrier_name  # Keep others unchanged
+  ))
+
+
+
+# Notes about Recipe: If you find yourself using mutate on Flights_Train, use step_mutate() in the recipe instead. This will allow you to make the same adjustments in the Test Data. If you find yourself wanting to exclude some predictors, use step_rm() instead of select(). 
+```
+</details>
+
+```{r}
+lasso_spec <- linear_reg() %>%             
+  set_mode("regression") %>% 
+  set_engine("glmnet") %>%                 
+  set_args(mixture = 1, penalty = tune())  
+
+
+variable_recipe <- recipe(arr_delay ~ ., data = clean_data) %>% 
+  step_novel(all_nominal_predictors()) %>%
+  step_dummy(all_nominal_predictors())
+
+
+lasso_workflow <- workflow() %>% 
+  add_recipe(variable_recipe) %>% 
+  add_model(lasso_spec)
+
+
+set.seed(253)
+lasso_models <- lasso_workflow %>% 
+  tune_grid(
+    grid = grid_regular(penalty(range = c(-5, 1)), levels = 100),  
+    resamples = vfold_cv(clean_data, v = 10),   
+    metrics = metric_set(mae)
+  )
+
+```
+
+
+```{r}
+parsimonious_penalty <- lasso_models %>% 
+  select_by_one_std_err(metric = "mae", desc(penalty))
+
+# Finalize the model
+final_lasso <- lasso_workflow %>% 
+  finalize_workflow(parameters = parsimonious_penalty) %>% 
+  fit(data = clean_data)
+
+parsimonious_penalty
+```
+
+```{r}
+final_lasso %>% 
+  tidy() %>% 
+  filter(estimate != 0) %>%  # this is useful to focus on the subset that are kept in
+  mutate(estimate = round(estimate, 3))
+```
+
+# Model Evaluation
+
+*Instructions: Evaluate your final model based on the four questions: Is it strong? Is it good? Is it accurate in predictions? Is it fair? Include evidence to support your answers. You may use up to 3 visualizations in this section.* 
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+# visualization
+```
+
+
+
+# Contributions
+
+*Instructions: Describe each student's concrete contribution to this project. Please be specific and honest.*
+
+
+
